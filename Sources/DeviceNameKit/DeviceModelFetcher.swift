@@ -1,3 +1,8 @@
+//
+//  DeviceModelFetcher.swift
+//  MIT License (c) 2025 Daehee Kim
+//
+
 import Foundation
 
 /// A utility that fetches and stores device model data.

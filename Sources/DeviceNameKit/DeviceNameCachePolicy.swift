@@ -1,3 +1,8 @@
+//
+//  DeviceNameCachePolicy.swift
+//  MIT License (c) 2025 Daehee Kim
+//
+
 import Foundation
 
 /// A policy that determines how long the fetched device name should be cached.

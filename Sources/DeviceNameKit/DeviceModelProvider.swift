@@ -1,3 +1,8 @@
+//
+//  DeviceModelProvider.swift
+//  MIT License (c) 2025 Daehee Kim
+//
+
 import Foundation
 
 /// A protocol that provides device model information.

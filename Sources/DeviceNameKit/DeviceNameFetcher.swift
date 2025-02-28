@@ -1,3 +1,8 @@
+//
+//  DeviceNameFetcher.swift
+//  MIT License (c) 2025 Daehee Kim
+//
+
 import Foundation
 import Combine
 import OSLog
