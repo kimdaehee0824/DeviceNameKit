@@ -1,24 +1,55 @@
 import Foundation
 
-/// 기기 모델 정보를 제공하는 프로토콜
+/// A protocol that provides device model information.
+///
+/// `DeviceModelProvider` defines methods for retrieving a device's unique identifier
+/// and fetching a mapping of model identifiers to their human-readable names.
 protocol DeviceModelProvider {
+    /// The URL pointing to the JSON file containing device model mappings.
     var jsonURL: URL { get }
+
+    /// Fetches a dictionary mapping device identifiers to their human-readable names.
+    ///
+    /// - Returns: A dictionary where keys are device identifiers (e.g., `"iPhone17,4"`)
+    ///            and values are human-readable names (e.g., `"iPhone 15 Pro"`).
+    /// - Throws: An error if the network request fails or the JSON data is invalid.
     func fetchDeviceModels() async throws -> [String: String]
+
+    /// Returns the device's unique identifier.
+    ///
+    /// - Returns: A string representing the device's internal identifier
+    ///            (e.g., `"iPhone17,4"` for iPhone 15 Pro).
     func getDeviceIdentifier() -> String
 }
 
-/// 공통 JSON 다운로드 및 디코딩 기능을 제공하는 기본 구현
+/// Default implementation of `fetchDeviceModels()` for `DeviceModelProvider`.
 extension DeviceModelProvider {
+    /// Fetches device model mappings from the provided `jsonURL`.
+    ///
+    /// - Returns: A dictionary mapping device identifiers to their human-readable names.
+    /// - Throws: An error if the network request fails or JSON parsing is unsuccessful.
     func fetchDeviceModels() async throws -> [String: String] {
         let (data, _) = try await URLSession.shared.data(from: jsonURL)
         return try JSONDecoder().decode([String: String].self, from: data)
     }
+
+    /// Converts a `utsname` structure into a string representing the device identifier.
+    ///
+    /// - Parameter machine: A reference to the `utsname` structure.
+    /// - Returns: A string representation of the machine identifier (e.g., `"iPhone17,4"`).
+    func convertMachineToString(_ machine: inout utsname) -> String {
+        return withUnsafeBytes(of: &machine.machine) { rawBufferPointer in
+            let pointer = rawBufferPointer.bindMemory(to: CChar.self).baseAddress!
+            return String(cString: pointer)
+        }
+    }
 }
 
-/// iOS(iPhone & iPad) 모델 정보를 가져오는 클래스
-struct iOSModelProvider: DeviceModelProvider {
+/// Provides device model information for iOS devices (iPhone & iPad).
+struct iOSDeviceModelProvider: DeviceModelProvider {
     let jsonURL = URL(string: "\(Constant.modelNamePath)iOS.json")!
 
+    /// Returns the unique device identifier for iOS devices.
     func getDeviceIdentifier() -> String {
         var systemInfo = utsname()
         uname(&systemInfo)
@@ -26,10 +57,11 @@ struct iOSModelProvider: DeviceModelProvider {
     }
 }
 
-/// Apple Watch 모델 정보를 가져오는 클래스
-struct AppleWatchModelProvider: DeviceModelProvider {
+/// Provides device model information for watchOS devices (Apple Watch).
+struct watchOSDeviceModelProvider: DeviceModelProvider {
     let jsonURL = URL(string: "\(Constant.modelNamePath)watchOS.json")!
 
+    /// Returns the unique device identifier for watchOS devices.
     func getDeviceIdentifier() -> String {
         var systemInfo = utsname()
         uname(&systemInfo)
@@ -37,10 +69,11 @@ struct AppleWatchModelProvider: DeviceModelProvider {
     }
 }
 
-/// macOS (Mac) 모델 정보를 가져오는 클래스
-struct MacModelProvider: DeviceModelProvider {
+/// Provides device model information for macOS devices (Mac).
+struct macOSDeviceModelProvider: DeviceModelProvider {
     let jsonURL = URL(string: "\(Constant.modelNamePath)macOS.json")!
 
+    /// Returns the unique device identifier for macOS devices.
     func getDeviceIdentifier() -> String {
         var size: Int = 0
         sysctlbyname("hw.model", nil, &size, nil, 0)
@@ -50,10 +83,11 @@ struct MacModelProvider: DeviceModelProvider {
     }
 }
 
-/// Apple TV (tvOS) 모델 정보를 가져오는 클래스
-struct TVOSModelProvider: DeviceModelProvider {
+/// Provides device model information for tvOS devices (Apple TV).
+struct tvOSDeviceModelProvider: DeviceModelProvider {
     let jsonURL = URL(string: "\(Constant.modelNamePath)tvOS.json")!
 
+    /// Returns the unique device identifier for tvOS devices.
     func getDeviceIdentifier() -> String {
         var systemInfo = utsname()
         uname(&systemInfo)
@@ -61,21 +95,14 @@ struct TVOSModelProvider: DeviceModelProvider {
     }
 }
 
-/// Apple Vision Pro (visionOS) 모델 정보를 가져오는 클래스
-struct VisionOSModelProvider: DeviceModelProvider {
+/// Provides device model information for visionOS devices (Apple Vision Pro).
+struct visionOSDeviceModelProvider: DeviceModelProvider {
     let jsonURL = URL(string: "\(Constant.modelNamePath)visionOS.json")!
 
+    /// Returns the unique device identifier for visionOS devices.
     func getDeviceIdentifier() -> String {
         var systemInfo = utsname()
         uname(&systemInfo)
         return convertMachineToString(&systemInfo)
-    }
-}
-
-/// 공통: `utsname` 구조체에서 machine 값을 변환하는 함수
-private func convertMachineToString(_ machine: inout utsname) -> String {
-    return withUnsafeBytes(of: &machine.machine) { rawBufferPointer in
-        let pointer = rawBufferPointer.bindMemory(to: CChar.self).baseAddress!
-        return String(cString: pointer)
     }
 }
