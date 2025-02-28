@@ -1,31 +1,33 @@
 ![Logo image](Asset/DeviceNameKit_banner.png)
 
-DeviceNameKit은 iOS, macOS, watchOS, tvOS, visionOS에서 **기기 식별자(Device Identifier)를 상업용 모델명(Device Model Name)으로 변환**하는 경량 SDK입니다. SDK 업데이트 없이 최신 기기 정보를 유지할 수 있으며, 캐싱 기능을 지원하여 불필요한 서버 요청을 방지할 수 있습니다.
+**DeviceNameKit** is a lightweight SDK that converts **device identifiers** into **commercial model names** on iOS, macOS, watchOS, tvOS, and visionOS. It maintains up-to-date device information without requiring SDK updates and supports caching to prevent unnecessary server requests.
 
-## 지원 플랫폼
+[`Click here`](README_ko.md) to view the document in Korean.
 
-| OS       | 최소 지원 버전 |
-| -------- | -------- |
-| iOS      | 13.0+    |
-| macOS    | 11.0+    |
-| watchOS  | 6.0+     |
-| tvOS     | 13.0+    |
-| visionOS | 1.0+     |
+## Supported Platforms
 
-## 설치 방법
+| OS       | Minimum Version |
+| -------- | --------------- |
+| iOS      | 13.0+           |
+| macOS    | 11.0+           |
+| watchOS  | 6.0+            |
+| tvOS     | 13.0+           |
+| visionOS | 1.0+            |
+
+## Installation
 
 ### Swift Package Manager (SPM)
 
-1. Xcode에서 `File > Add Packages...` 를 선택해주세요
-2. 다음 URL을 입력하여 패키지를 추가해주세요
+1. In Xcode, go to `File > Add Packages...`
+2. Enter the following URL to add the package:
    ```
    https://github.com/kimdaehee0824/DeviceNameKit.git
    ```
-3. Dependency 추가 후 `import DeviceNameKit` 를 사용하여 DeviceNameKit를 사용할 수 있습니다. 
+3. After adding the dependency, you can use `import DeviceNameKit` to access DeviceNameKit.
 
-## 사용법
+## Usage
 
-### 기본적인 기기 모델명 변환
+### Basic Device Model Name Conversion
 
 ```swift
 import DeviceNameKit
@@ -34,24 +36,24 @@ let fetcher = DeviceNameFetcher(cachePolicy: .oneDay)
 
 Task {
     let modelName = try await fetcher.getDeviceName()
-    print("기기 모델명: \(modelName)") // 예: iPhone 15 Pro
+    print("Device Model Name: \(modelName)") // Example: iPhone 15 Pro
 }
 ```
 
-### Completion Handler 방식
+### Completion Handler Approach
 
 ```swift
 fetcher.getDeviceName { result in
     switch result {
     case .success(let modelName):
-        print("기기 모델명: \(modelName)")
+        print("Device Model Name: \(modelName)")
     case .failure(let error):
-        print("오류 발생: \(error.localizedDescription)")
+        print("Error: \(error.localizedDescription)")
     }
 }
 ```
 
-### Combine API 사용
+### Using Combine API
 
 ```swift
 import Combine
@@ -59,64 +61,66 @@ import Combine
 let cancellable = fetcher.getDeviceNamePublisher()
     .sink(receiveCompletion: { completion in
         if case .failure(let error) = completion {
-            print("오류 발생: \(error)")
+            print("Error: \(error)")
         }
     }, receiveValue: { modelName in
-        print("기기 모델명: \(modelName)")
+        print("Device Model Name: \(modelName)")
     })
 ```
 
-### `preload()`를 활용한 사전 로드
-클래스를 선언할 때. preload 함수를 사용하면 미리 서버와 통신해서 상업용 모델명을 가져올 수 있습니다. 
+### Using `preload()` for Preloading
+
+Calling `preload()` at initialization allows the SDK to fetch the commercial model name from the server in advance.
 
 ```swift
 let fetcher = DeviceNameFetcher(cachePolicy: .threeDays)
-fetcher.preload() // 앱 시작 시 미리 로드하여 성능 최적화
+fetcher.preload() // Optimize performance by preloading at app launch
 ```
 
-### `deviceModel` 속성으로 간편하게 접근
-`preload()` 함수를 사용하고. 일정 시간 후 모델명을 String값으로 바로 접근할 수 있습니다.
-서버 통신이 완려되지 않았거나 실패할 경우. `nil`을 반환합니다.
+### Accessing Model Name via `deviceModel`
+
+After calling `preload()`, the model name can be accessed as a `String` value. If the server request is not completed or fails, `nil` is returned.
 
 ```swift
-print("현재 기기 모델명: \(fetcher.deviceModel ?? "불명")")
+print("Current Device Model Name: \(fetcher.deviceModel ?? "Unknown")")
 ```
 
-## 동작 원리
+## How It Works
 
-1. **기기 식별자 조회**: `uname()` 또는 `sysctlbyname("hw.model")`을 사용하여 현재 기기의 식별자를 가져옵니다.
-2. **기기 모델명 매핑**: github 원격 저장소의 JSON 데이터에서 최신 모델명 정보를 가져옵니다.
-3. **캐싱 적용 (옵션)**: 기본적으로 최신 데이터를 가져오며, 필요하면 캐싱 기능을 사용하여 성능을 최적화합니다.
+1. **Retrieve Device Identifier**: The SDK fetches the device identifier using `uname()` or `sysctlbyname("hw.model")`.
+2. **Map to Device Model Name**: The latest model name is obtained from a JSON dataset stored in a GitHub repository.
+3. **Apply Caching (Optional)**: The SDK fetches the latest data by default, but caching can be enabled for performance optimization.
 
-## 캐싱 정책
+## Caching Policies
 
-| 정책                      | 설명             |
-| ----------------------- | -------------- |
-| `.noCache`              | 항상 최신 데이터를 가져옴 |
-| `.oneDay`               | 1일간 캐싱 유지      |
-| `.threeDays`            | 3일간 캐싱 유지      |
-| `.sevenDays`            | 7일간 캐싱 유지      |
-| `.oneMonth`             | 1개월간 캐싱 유지     |
-| `.custom(TimeInterval)` | 사용자 지정 기간      |
+| Policy                     | Description                |
+| -------------------------- | -------------------------- |
+| `.noCache`                 | Always fetch the latest data |
+| `.oneDay`                  | Cache data for 1 day       |
+| `.threeDays`               | Cache data for 3 days      |
+| `.sevenDays`               | Cache data for 7 days      |
+| `.oneMonth`                | Cache data for 1 month     |
+| `.custom(TimeInterval)`    | Custom caching duration    |
 
-### 캐싱 적용 예시
+### Example of Applying Caching
 
 ```swift
 let fetcher = DeviceNameFetcher(cachePolicy: .threeDays)
 ```
 
-## 기여 방법
+## Contribution Guidelines
 
-1. 이슈 또는 기능 요청은 `Issues` 탭을 활용해주세요.
-2. 새로운 기능을 제안하고 싶다면 `Discussions`에 의견을 남겨주세요.
-3. PR 기여 방법:
-   - 저장소를 Fork합니다.
-   - 새로운 브랜치를 생성합니다. (`feature/new-feature`)
-   - 개발 후 PR을 요청합니다.
+1. Use the `Issues` tab for bug reports and feature requests.
+2. Share new feature ideas in `Discussions`.
+3. Steps for contributing via PR:
+   - Fork the repository.
+   - Create a new branch (`feature/new-feature`).
+   - Develop and submit a pull request (PR).
 
 > [!NOTE]
-> 이 레포지토리의 업데이트가 느릴 경우, 레포지토리를 fork하여 직접 업데이트하세요.
+> If this repository updates slowly, you can fork and maintain your own updated version.
 
-## 라이선스
+## License
 
-이 프로젝트는 MIT 라이선스 하에 배포됩니다. 자세한 내용은 [`LICENSE`](LICENSE) 파일을 참고하세요.
+This project is distributed under the MIT License. See [`LICENSE`](LICENSE) for more details.
+
