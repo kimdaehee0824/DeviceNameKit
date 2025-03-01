@@ -1,6 +1,6 @@
 Pod::Spec.new do |spec|
   spec.name         = "DeviceNameKit"
-  spec.version      = "1.0.0"
+  spec.version      = "0.0.1"
   spec.summary      = "A library for fetching device names based on model identifiers."
   spec.description  = "DeviceNameKit provides a simple way to retrieve human-readable device names from device model identifiers."
   spec.homepage     = "https://github.com/kimdaehee0824/DeviceNameKit"
