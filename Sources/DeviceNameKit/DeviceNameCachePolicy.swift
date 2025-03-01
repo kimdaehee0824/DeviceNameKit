@@ -26,6 +26,11 @@ public enum DeviceNameCachePolicy: Equatable {
     /// Cache the device model name for **1 month (30 days)**.
     case oneMonth
 
+    /// Cache the device model name **forever** (permanently stored until manually removed).
+    ///
+    /// This option ensures that once fetched, the device model name is never re-fetched.
+    case forever
+
     /// A custom caching policy with a user-defined duration.
     ///
     /// - Parameter duration: The caching duration in seconds.
@@ -34,6 +39,7 @@ public enum DeviceNameCachePolicy: Equatable {
     /// Returns the cache duration based on the selected policy.
     ///
     /// - Returns: The cache duration in seconds. Returns `nil` for `.noCache`, meaning no caching is applied.
+    ///   If `.forever` is selected, this returns `Double.greatestFiniteMagnitude` to represent an effectively infinite duration.
     public var cacheDuration: TimeInterval? {
         switch self {
         case .noCache:
@@ -46,6 +52,8 @@ public enum DeviceNameCachePolicy: Equatable {
             return 60 * 60 * 24 * 7
         case .oneMonth:
             return 60 * 60 * 24 * 30
+        case .forever:
+            return Double.greatestFiniteMagnitude
         case .custom(let duration):
             return duration
         }

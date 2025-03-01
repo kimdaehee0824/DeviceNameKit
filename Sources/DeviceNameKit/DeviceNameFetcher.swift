@@ -78,9 +78,7 @@ public final class DeviceNameFetcher {
     /// - Returns: A `String` representing the device model name.
     /// - Throws: A `DeviceNameFetcherError.fetchFailed` error if the fetch operation fails.
     public func getDeviceName() async throws -> String {
-        if let cachedName = Self.getCachedDeviceName(), isValidCache() {
-            return cachedName
-        }
+        if let cachedName = Self.getCachedDeviceName(), isValidCache() { return cachedName }
 
         var fetcher = self.fetcher
         let deviceIdentifier = fetcher.getDeviceModelName()
@@ -105,9 +103,7 @@ public final class DeviceNameFetcher {
     ///
     /// - Returns: A `String` representing the device model name, or the original device identifier in case of failure.
     public func getDeviceNameOrDefault() async -> String {
-        if let cachedName = Self.getCachedDeviceName(), isValidCache() {
-            return cachedName
-        }
+        if let cachedName = Self.getCachedDeviceName(), isValidCache() { return cachedName }
 
         var fetcher = self.fetcher
         let deviceIdentifier = fetcher.getDeviceModelName()
@@ -116,9 +112,7 @@ public final class DeviceNameFetcher {
             try await fetcher.loadDeviceModels()
             let modelName = fetcher.getDeviceModelName()
 
-            if cachePolicy != .noCache {
-                Self.cacheDeviceName(modelName)
-            }
+            if cachePolicy != .noCache { Self.cacheDeviceName(modelName) }
             return modelName
         } catch {
             os_log("Failed to fetch device model name: %@ (Identifier: %@)", log: .default, type: .error, error.localizedDescription, deviceIdentifier)
@@ -200,7 +194,11 @@ public final class DeviceNameFetcher {
     /// Validates if the cached data is still valid based on the caching policy.
     ///
     /// - Returns: `true` if the cache is still valid, otherwise `false`.
+    ///   If `.forever` is selected, this method always returns `true`.
     private func isValidCache() -> Bool {
+        // If the policy is `.forever`, the cache never expires
+        if cachePolicy == .forever { return true }
+
         let lastFetchTime = UserDefaults.standard.double(forKey: Constant.userDefaultsLastFetchKey)
         let elapsedTime = Date().timeIntervalSince1970 - lastFetchTime
         return cachePolicy.cacheDuration.map { elapsedTime < $0 } ?? false
