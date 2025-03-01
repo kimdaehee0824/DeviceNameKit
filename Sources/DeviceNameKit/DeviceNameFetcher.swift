@@ -61,11 +61,13 @@ public final class DeviceNameFetcher {
 
         Task.detached(priority: .background) { [weak self] in
             guard let self = self else { return }
-
-            let deviceIdentifier = self.fetcher.getDeviceModelName()
-            let name = try await self.getDeviceNameOrDefault()
-            Self.cacheDeviceName(name)
-            os_log("Device model cached: %@", log: .default, type: .info, name)
+            do {
+                let name = try await self.getDeviceName()
+                Self.cacheDeviceName(name)
+                os_log("Device model cached: %@", log: .default, type: .info, name)
+            } catch {
+                os_log("DeviceNameFetcher Preload Error: %@", log: .default, type: .error, error.localizedDescription)
+            }
         }
 
         return self
