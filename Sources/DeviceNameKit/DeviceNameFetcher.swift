@@ -47,6 +47,8 @@ public final class DeviceNameFetcher {
     /// Preloads the device model name into the cache.
     ///
     /// This method fetches and stores the device model name if caching is enabled.
+    /// If an error occurs, it logs the failure but does not interrupt execution.
+    ///
     /// - Returns: The current `DeviceNameFetcher` instance for method chaining.
     @discardableResult
     public func preload() -> Self {
@@ -59,13 +61,11 @@ public final class DeviceNameFetcher {
 
         Task.detached(priority: .background) { [weak self] in
             guard let self = self else { return }
-            do {
-                let name = try await self.getDeviceName()
-                Self.cacheDeviceName(name)
-                os_log("Device model cached: %@", log: .default, type: .info, name)
-            } catch {
-                os_log("DeviceNameFetcher Preload Error: %@", log: .default, type: .error, error.localizedDescription)
-            }
+
+            let deviceIdentifier = self.fetcher.getDeviceModelName()
+            let name = try await self.getDeviceNameOrDefault()
+            Self.cacheDeviceName(name)
+            os_log("Device model cached: %@", log: .default, type: .info, name)
         }
 
         return self
@@ -74,37 +74,74 @@ public final class DeviceNameFetcher {
     /// Retrieves the device model name asynchronously.
     ///
     /// - Returns: A `String` representing the device model name.
-    /// - Throws: An error if the data cannot be fetched.
+    /// - Throws: A `DeviceNameFetcherError.fetchFailed` error if the fetch operation fails.
     public func getDeviceName() async throws -> String {
         if let cachedName = Self.getCachedDeviceName(), isValidCache() {
             return cachedName
         }
 
         var fetcher = self.fetcher
-        try await fetcher.loadDeviceModels()
-        let modelName = fetcher.getDeviceModelName()
+        let deviceIdentifier = fetcher.getDeviceModelName()
 
-        if cachePolicy != .noCache {
-            Self.cacheDeviceName(modelName)
+        do {
+            try await fetcher.loadDeviceModels()
+            let modelName = fetcher.getDeviceModelName()
+
+            if cachePolicy != .noCache {
+                Self.cacheDeviceName(modelName)
+            }
+            return modelName
+        } catch {
+            throw DeviceNameFetcherError.fetchFailed(deviceIdentifier: deviceIdentifier, underlyingError: error)
         }
-        return modelName
+    }
+
+    /// Retrieves the device model name asynchronously with internal error handling.
+    ///
+    /// If fetching fails, it returns the original device identifier instead of throwing an error.
+    /// The failure is logged for debugging purposes.
+    ///
+    /// - Returns: A `String` representing the device model name, or the original device identifier in case of failure.
+    public func getDeviceNameOrDefault() async -> String {
+        if let cachedName = Self.getCachedDeviceName(), isValidCache() {
+            return cachedName
+        }
+
+        var fetcher = self.fetcher
+        let deviceIdentifier = fetcher.getDeviceModelName()
+
+        do {
+            try await fetcher.loadDeviceModels()
+            let modelName = fetcher.getDeviceModelName()
+
+            if cachePolicy != .noCache {
+                Self.cacheDeviceName(modelName)
+            }
+            return modelName
+        } catch {
+            os_log("Failed to fetch device model name: %@ (Identifier: %@)", log: .default, type: .error, error.localizedDescription, deviceIdentifier)
+            return deviceIdentifier
+        }
     }
 
     /// Retrieves the device model name using a completion handler.
     ///
     /// - Parameter completion: A closure that returns the device model name or an error.
-    public func getDeviceName(completion: @escaping (Result<String, Error>) -> Void) {
+    /// - Note: If an error occurs, `DeviceNameFetcherError.fetchFailed` is returned.
+    public func getDeviceName(completion: @escaping (Result<String, DeviceNameFetcherError>) -> Void) {
         if let cachedName = Self.getCachedDeviceName(), isValidCache() {
             completion(.success(cachedName))
             return
         }
+
+        let deviceIdentifier = fetcher.getDeviceModelName()
 
         Task {
             do {
                 let name = try await getDeviceName()
                 completion(.success(name))
             } catch {
-                completion(.failure(error))
+                completion(.failure(DeviceNameFetcherError.fetchFailed(deviceIdentifier: deviceIdentifier, underlyingError: error)))
             }
         }
     }
@@ -112,12 +149,15 @@ public final class DeviceNameFetcher {
     /// Retrieves the device model name using Combine API.
     ///
     /// - Returns: A `Future` publisher that emits the device model name or an error.
-    public func getDeviceNamePublisher() -> AnyPublisher<String, Error> {
+    /// - Note: If an error occurs, `DeviceNameFetcherError.fetchFailed` is returned.
+    public func getDeviceNamePublisher() -> AnyPublisher<String, DeviceNameFetcherError> {
         if let cachedName = Self.getCachedDeviceName(), isValidCache() {
             return Just(cachedName)
-                .setFailureType(to: Error.self)
+                .setFailureType(to: DeviceNameFetcherError.self)
                 .eraseToAnyPublisher()
         }
+
+        let deviceIdentifier = fetcher.getDeviceModelName()
 
         return Future { promise in
             Task {
@@ -125,7 +165,8 @@ public final class DeviceNameFetcher {
                     let name = try await self.getDeviceName()
                     promise(.success(name))
                 } catch {
-                    promise(.failure(error))
+                    let customError = DeviceNameFetcherError.fetchFailed(deviceIdentifier: deviceIdentifier, underlyingError: error)
+                    promise(.failure(customError))
                 }
             }
         }
