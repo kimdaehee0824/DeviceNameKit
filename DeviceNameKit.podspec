@@ -19,10 +19,9 @@ Pod::Spec.new do |spec|
 
   spec.source_files = "Sources/DeviceNameKit/**/*.{swift}"
 
+  spec.pod_target_xcconfig = { 'MACOSX_DEPLOYMENT_TARGET' => '11.0' }
+  spec.user_target_xcconfig = { 'MACOSX_DEPLOYMENT_TARGET' => '11.0' }
+
   spec.frameworks = "Foundation"
   spec.requires_arc = true
-
-  spec.test_spec do |test_spec|
-    test_spec.source_files = "Sources/DeviceNameKitTests/**/*.{swift}"
-  end
 end
