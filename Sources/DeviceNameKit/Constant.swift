@@ -12,7 +12,7 @@ struct Constant {
     ///
     /// - Note: If you fork this repository, make sure to change `kimdaehee0824`
     ///   to your own repository name.
-    static let modelNamePath: String = "https://raw.githubusercontent.com/kimdaehee0824/DeviceNameKit/DeviceName/"
+    static let modelNamePath: String = "https://raw.githubusercontent.com/kimdaehee0824/DeviceNameKit/refs/heads/main/DeviceName/"
 
     /// The UserDefaults key used to store the cached device name.
     static let userDefaultsDeviceNameKey = "device_name_cache"
