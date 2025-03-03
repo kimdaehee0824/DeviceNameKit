@@ -1,48 +1,67 @@
 ![Logo image](Asset/DeviceNameKit_banner.png)
 
-**DeviceNameKit** is a lightweight SDK that converts **device identifiers** into **commercial model names** on iOS, macOS, watchOS, tvOS, and visionOS. It maintains up-to-date device information without requiring SDK updates and supports caching to prevent unnecessary server requests.
+> You can view the document in different languages: [English](README.md), [한국어](README_ko.md), [日本語](README_jp.md)
 
-[`Click here`](README_ko.md) to view the document in Korean.
+**DeviceNameKit** is a powerful SDK that converts Apple device **identifiers (Device Identifier) into commercial model names (Device Model Name)**. It supports all Apple platforms, including iPhone, iPad, Mac, Apple TV, Vision Pro, and Apple Watch, and automatically maps the latest device information to provide intuitive model names.
+
+This library converts Apple's internal device identifiers (e.g., `iPhone15,2`) into user-friendly product names (e.g., `iPhone 14 Pro`). Additionally, it includes a **UserDefaults-based caching feature** to minimize unnecessary network requests and optimize performance.
+
+**DeviceNameKit** offers multiple data retrieval methods, allowing developers to choose the most suitable approach for their needs.
+
+- **Supports async/await:** Leverages Swift Concurrency for clean and intuitive asynchronous handling
+- **Supports Completion Handler:** Enables flexible data retrieval using the traditional callback pattern
+- **Supports Combine API:** Implements a reactive data flow using `Future`
+- **Caching feature:** Stores device model data to prevent repeated API calls and improve performance
+- **Reliable data retrieval:** The `getSafeDeviceName()` method ensures the app continues to function correctly even if a network error occurs by returning the original device identifier
+
+This SDK is useful in various scenarios where the app needs to correctly recognize the device model name, such as **applying device-specific settings, log analysis, A/B testing, and customer support emails.**
+
+To check out the demo app, click [here](https://github.com/kimdaehee0824/DeviceNameKit_Demo).
 
 ## Supported Platforms
 
-| OS       | Minimum Version |
-| -------- | --------------- |
-| iOS      | 13.0+           |
-| macOS    | 11.0+           |
-| watchOS  | 6.0+            |
-| tvOS     | 13.0+           |
-| visionOS | 1.0+            |
+| OS       | Minimum Supported Version |
+| -------- | ------------------------ |
+| iOS      | 13.0+                     |
+| macOS    | 11.0+                     |
+| watchOS  | 6.0+                      |
+| tvOS     | 13.0+                     |
+| visionOS | 1.0+                      |
 
 ## Installation
 
 ### Swift Package Manager (SPM)
 
-1. In Xcode, go to `File > Add Packages...`
+1. In Xcode, select `File > Add Packages...`
 2. Enter the following URL to add the package:
    ```
    https://github.com/kimdaehee0824/DeviceNameKit.git
    ```
-3. After adding the dependency, you can use `import DeviceNameKit` to access DeviceNameKit.
+3. After adding the dependency, you can use DeviceNameKit by importing it:
+   ```swift
+   import DeviceNameKit
+   ```
 
 ## Usage
 
-### Basic Device Model Name Conversion
-
+### 1. Basic Device Model Name Conversion (`async/await`)
 ```swift
-import DeviceNameKit
-
 let fetcher = DeviceNameFetcher(cachePolicy: .oneDay)
 
 Task {
-    let modelName = try await fetcher.getDeviceName()
-    print("Device Model Name: \(modelName)") // Example: iPhone 15 Pro
+    do {
+        let modelName = try await fetcher.getDeviceName()
+        print("Device Model Name: \(modelName)") // e.g., iPhone 15 Pro
+    } catch {
+        print("Error: \(error.localizedDescription)")
+    }
 }
 ```
 
-### Completion Handler Approach
-
+### 2. Using Completion Handler
 ```swift
+let fetcher = DeviceNameFetcher(cachePolicy: .oneDay)
+
 fetcher.getDeviceName { result in
     switch result {
     case .success(let modelName):
@@ -53,10 +72,11 @@ fetcher.getDeviceName { result in
 }
 ```
 
-### Using Combine API
-
+### 3. Using Combine API
 ```swift
 import Combine
+
+let fetcher = DeviceNameFetcher(cachePolicy: .oneDay)
 
 let cancellable = fetcher.getDeviceNamePublisher()
     .sink(receiveCompletion: { completion in
@@ -68,59 +88,77 @@ let cancellable = fetcher.getDeviceNamePublisher()
     })
 ```
 
-### Using `preload()` for Preloading
+### 4. Function That Does Not Emit Errors (`getSafeDeviceName`)
+Using `getSafeDeviceName()`, the original device identifier is returned if an error occurs, making error handling unnecessary.
 
-Calling `preload()` at initialization allows the SDK to fetch the commercial model name from the server in advance.
+```swift
+let fetcher = DeviceNameFetcher(cachePolicy: .oneDay)
+
+Task {
+    let modelName = await fetcher.getSafeDeviceName()
+    print("Device Model Name: \(modelName)")
+}
+```
+This method internally logs failures using `os.log` while returning the original device identifier.
+
+### 5. Preloading with `preload()`
+Calling `preload()` allows the device model name to be retrieved and cached in advance by communicating with the server.
 
 ```swift
 let fetcher = DeviceNameFetcher(cachePolicy: .threeDays)
 fetcher.preload() // Optimize performance by preloading at app launch
 ```
 
-### Accessing Model Name via `deviceModel`
-
-After calling `preload()`, the model name can be accessed as a `String` value. If the server request is not completed or fails, `nil` is returned.
+### 6. Accessing via `deviceModel` Property
+After calling `preload()`, the model name can be accessed directly as a `String` after a certain time. If the server communication is incomplete or has failed, it returns `nil`.
 
 ```swift
 print("Current Device Model Name: \(fetcher.deviceModel ?? "Unknown")")
 ```
 
-## How It Works
+## Caching Policy
+| Policy | Description |
+|---|---|
+| `.noCache` | Always fetches the latest data |
+| `.oneDay` | Caches data for 1 day |
+| `.threeDays` | Caches data for 3 days |
+| `.sevenDays` | Caches data for 7 days |
+| `.oneMonth` | Caches data for 1 month |
+| `.custom(TimeInterval)` | Custom caching duration |
+| `.forever` | Caches data permanently |
 
-1. **Retrieve Device Identifier**: The SDK fetches the device identifier using `uname()` or `sysctlbyname("hw.model")`.
-2. **Map to Device Model Name**: The latest model name is obtained from a JSON dataset stored in a GitHub repository.
-3. **Apply Caching (Optional)**: The SDK fetches the latest data by default, but caching can be enabled for performance optimization.
-
-## Caching Policies
-
-| Policy                     | Description                |
-| -------------------------- | -------------------------- |
-| `.noCache`                 | Always fetch the latest data |
-| `.oneDay`                  | Cache data for 1 day       |
-| `.threeDays`               | Cache data for 3 days      |
-| `.sevenDays`               | Cache data for 7 days      |
-| `.oneMonth`                | Cache data for 1 month     |
-| `.custom(TimeInterval)`    | Custom caching duration    |
-
-### Example of Applying Caching
-
+### Applying Caching
 ```swift
 let fetcher = DeviceNameFetcher(cachePolicy: .threeDays)
 ```
+With this configuration, the same device returns cached model names for 3 days, after which the data is refreshed.
+Since device model names rarely change, permanent caching is recommended.
 
-## Contribution Guidelines
+If caching is not set, the latest data is always fetched.
 
-1. Use the `Issues` tab for bug reports and feature requests.
-2. Share new feature ideas in `Discussions`.
-3. Steps for contributing via PR:
-   - Fork the repository.
-   - Create a new branch (`feature/new-feature`).
-   - Develop and submit a pull request (PR).
+## Error Handling
+The `DeviceNameFetcherError` enum provides error details.
+
+```swift
+public enum DeviceNameFetcherError: Error {
+    case fetchFailed(deviceIdentifier: String, underlyingError: Error)
+}
+```
+When an error occurs, `deviceIdentifier` (e.g., "iPhone17,4") and the `underlyingError` can be inspected.
+
+## How It Works
+1. **Retrieve Device Identifier:** The current device's identifier is obtained using `uname()` or `sysctlbyname("hw.model")`.
+2. **Map to Device Model Name:** The JSON data stored in this GitHub repository is referenced to obtain the latest device model name. The JSON files are located in the `DeviceName` folder, categorized by OS.
+
+## Contribution
+
+1. Please submit issues or feature requests under the `Issues` tab.
+2. Pull requests are always welcome. If you work on changes or new features, we will review them and add them to future versions.
 
 > [!NOTE]
-> If this repository updates slowly, you can fork and maintain your own updated version.
+> If updates to this repository are slow, or if you prefer to manage the JSON data yourself, fork this repository and update it directly.
 
 ## License
 
-This project is distributed under the MIT License. See [`LICENSE`](LICENSE) for more details.
+This project is distributed under the MIT License. For details, refer to the [`LICENSE`](LICENSE) file.
 
