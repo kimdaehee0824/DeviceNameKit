@@ -102,7 +102,7 @@ public final class DeviceNameFetcher {
     /// The failure is logged for debugging purposes.
     ///
     /// - Returns: A `String` representing the device model name, or the original device identifier in case of failure.
-    public func getDeviceNameOrDefault() async -> String {
+    public func getSafeDeviceName() async -> String {
         if let cachedName = Self.getCachedDeviceName(), isValidCache() { return cachedName }
 
         var fetcher = self.fetcher
