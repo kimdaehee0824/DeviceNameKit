@@ -2,7 +2,7 @@
 
 > You can view the document in different languages: [English](README.md), [한국어](README_ko.md), [日本語](README_jp.md)
 
-**DeviceNameKit** is a powerful SDK that converts Apple device **identifiers (Device Identifier) into commercial model names (Device Model Name)**. It supports all Apple platforms, including iPhone, iPad, Mac, and Apple Watch, and automatically maps the latest device information to provide intuitive model names.
+**DeviceNameKit** is a powerful SDK that converts Apple device **identifiers (Device Identifier) into commercial model names (Device Model Name)**. It supports all Apple platforms, including iPhone, iPad, Mac, Apple TV, Vision Pro, and Apple Watch, and automatically maps the latest device information to provide intuitive model names.
 
 This library converts Apple's internal device identifiers (e.g., `iPhone15,2`) into user-friendly product names (e.g., `iPhone 14 Pro`). Additionally, it includes a **UserDefaults-based caching feature** to minimize unnecessary network requests and optimize performance.
 
@@ -46,8 +46,6 @@ To check out the demo app, click [here](https://github.com/kimdaehee0824/DeviceN
 
 ### 1. Basic Device Model Name Conversion (`async/await`)
 ```swift
-import DeviceNameKit
-
 let fetcher = DeviceNameFetcher(cachePolicy: .oneDay)
 
 Task {
@@ -62,6 +60,8 @@ Task {
 
 ### 2. Using Completion Handler
 ```swift
+let fetcher = DeviceNameFetcher(cachePolicy: .oneDay)
+
 fetcher.getDeviceName { result in
     switch result {
     case .success(let modelName):
@@ -75,6 +75,8 @@ fetcher.getDeviceName { result in
 ### 3. Using Combine API
 ```swift
 import Combine
+
+let fetcher = DeviceNameFetcher(cachePolicy: .oneDay)
 
 let cancellable = fetcher.getDeviceNamePublisher()
     .sink(receiveCompletion: { completion in
@@ -90,6 +92,8 @@ let cancellable = fetcher.getDeviceNamePublisher()
 Using `getSafeDeviceName()`, the original device identifier is returned if an error occurs, making error handling unnecessary.
 
 ```swift
+let fetcher = DeviceNameFetcher(cachePolicy: .oneDay)
+
 Task {
     let modelName = await fetcher.getSafeDeviceName()
     print("Device Model Name: \(modelName)")

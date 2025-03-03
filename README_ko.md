@@ -2,7 +2,7 @@
 
 > You can view the document in different languages: [English](README.md), [한국어](README_ko.md), [日本語](README_jp.md)
 
-**DeviceNameKit**은 Apple 기기의 **기기 식별자(Device Identifier)를 상업용 모델명(Device Model Name)으로 변환**하는 강력한 SDK입니다. iPhone, iPad, Mac, Apple Watch 등 모든 Apple 플랫폼에서 사용 가능하며, 최신 기기 정보를 자동으로 매핑하여 직관적인 모델명을 제공합니다.
+**DeviceNameKit**은 Apple 기기의 **기기 식별자(Device Identifier)를 상업용 모델명(Device Model Name)으로 변환**하는 강력한 SDK입니다. iPhone, iPad, Mac, Apple Watch, Apple TV, Vision Pro 등 모든 Apple 플랫폼에서 사용 가능하며, 최신 기기 정보를 자동으로 매핑하여 직관적인 모델명을 제공합니다.
 
 이 라이브러리는 Apple이 사용하는 내부 기기 식별자(예: `iPhone15,2`)를 사용자가 이해하기 쉬운 제품명(예: `iPhone 14 Pro`)으로 변환하는 기능을 제공합니다. 또한, **UserDefaults 기반의 캐싱 기능**을 통해 불필요한 네트워크 요청을 최소화하고, 성능을 최적화할 수 있습니다.
 
@@ -41,8 +41,6 @@ Demo 앱을 확인하려면 [여기](https://github.com/kimdaehee0824/DeviceName
 ## 사용법
 ### 1. 기본적인 기기 모델명 변환 (`async/await`)
 ```swift
-import DeviceNameKit
-
 let fetcher = DeviceNameFetcher(cachePolicy: .oneDay)
 
 Task {
@@ -57,6 +55,8 @@ Task {
 
 ### 2. Completion Handler 방식 사용
 ```swift
+let fetcher = DeviceNameFetcher(cachePolicy: .oneDay)
+
 fetcher.getDeviceName { result in
     switch result {
     case .success(let modelName):
@@ -70,6 +70,8 @@ fetcher.getDeviceName { result in
 ### 3. Combine API 사용
 ```swift
 import Combine
+
+let fetcher = DeviceNameFetcher(cachePolicy: .oneDay)
 
 let cancellable = fetcher.getDeviceNamePublisher()
     .sink(receiveCompletion: { completion in
@@ -85,6 +87,8 @@ let cancellable = fetcher.getDeviceNamePublisher()
 `getSafeDeviceName()`을 사용하면 오류가 발생하더라도 기본 기기 식별자를 반환하여 에러 핸들링이 필요 없다면 해당 코드를 사용하는 것이 좋습니다.
 
 ```swift
+let fetcher = DeviceNameFetcher(cachePolicy: .oneDay)
+
 Task {
     let modelName = await fetcher.getSafeDeviceName()
     print("기기 모델명: \(modelName)")
