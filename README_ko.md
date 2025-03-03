@@ -1,6 +1,6 @@
 ![Logo image](Asset/DeviceNameKit_banner.png)
 
-You can view the document in different languages: [English](README.md), [한국어](README.md), [日本語](README.md)
+> You can view the document in different languages: [English](README.md), [한국어](README.md), [日本語](README.md)
 
 **DeviceNameKit**은 Apple 기기의 **기기 식별자(Device Identifier)를 상업용 모델명(Device Model Name)으로 변환**하는 강력한 SDK입니다. iPhone, iPad, Mac, Apple Watch 등 모든 Apple 플랫폼에서 사용 가능하며, 최신 기기 정보를 자동으로 매핑하여 직관적인 모델명을 제공합니다.
 
@@ -16,6 +16,7 @@ You can view the document in different languages: [English](README.md), [한국�
 
 이 SDK는 앱 내에서 기기 모델명을 사용자가 정확하게 파악해야 하는 경우, 예를 들어 **디바이스별 설정 적용, 로그 분석, A/B 테스트, CS 메일 등 다양한 용도**에 활용할 수 있습니다.
 
+Demo 앱을 확인하려면 [여기](https://github.com/kimdaehee0824/DeviceNameKit_Demo)를 클릭하세요. 
 ## 지원 플랫폼
 
 | OS       | 최소 지원 버전 |
