@@ -45,6 +45,16 @@
     "Watch7,10": "Apple Watch Series 10 (42mm)",
     "Watch7,9": "Apple Watch Series 10 (46mm)",
     "Watch7,11": "Apple Watch Series 10 (46mm)",
+    "Watch7,12": "Apple Watch Ultra 3",
+    "Watch7,13": "Apple Watch SE 3 (40mm)",
+    "Watch7,15": "Apple Watch SE 3 (40mm)",
+    "Watch7,14": "Apple Watch SE 3 (44mm)",
+    "Watch7,16": "Apple Watch SE 3 (44mm)",
+    "Watch7,17": "Apple Watch Series 11 (42mm)",
+    "Watch7,19": "Apple Watch Series 11 (42mm)",
+    "Watch7,18": "Apple Watch Series 11 (46mm)",
+    "Watch7,20": "Apple Watch Series 11 (46mm)",
+    
     "i386": "Simulator (i386)",
     "x86_64": "Simulator (x86_64)",
     "arm64": "Simulator (arm64)"
