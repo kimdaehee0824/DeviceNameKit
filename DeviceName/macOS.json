@@ -1,4 +1,8 @@
 {
+    "Mac17,7": "MacBook Pro 14-inch (2026, M5 Pro/Max)",
+    "Mac17,9": "MacBook Pro 14-inch (2026, M5 Pro/Max)",
+    "Mac17,6": "MacBook Pro 16-inch (2026, M5 Pro/Max)",
+    "Mac17,8": "MacBook Pro 16-inch (2026, M5 Pro/Max)",
     "Mac16,1": "MacBook Pro 14-inch (2024, M4)",
     "Mac16,6": "MacBook Pro 14-inch (2024, M4 Pro/Max)",
     "Mac16,8": "MacBook Pro 14-inch (2024, M4 Pro/Max)",
@@ -47,6 +51,8 @@
     "MacBookPro11,3": "MacBook Pro 15-inch (2013, Retina)",
     "MacBookPro11,1": "MacBook Pro 13-inch (2013, Retina)",
 
+    "Mac17,3": "MacBook Air 13-inch (M5, 2026)",
+    "Mac17,4": "MacBook Air 15-inch (M5, 2026)",
     "Mac16,13": "MacBook Air 15-inch (M4, 2025)",
     "Mac16,12": "MacBook Air 13-inch (M4, 2025)",
     "Mac15,13": "MacBook Air 15-inch (M3, 2024)",
@@ -64,6 +70,8 @@
     "MacBookAir6,2": "MacBook Air 13-inch (2014, Early)",
     "MacBookAir6,1": "MacBook Air 11-inch (2013, Mid)",
     "MacBookAir6,2": "MacBook Air 13-inch (2013, Mid)",
+
+    "Mac17,5": "MacBook Neo 13-inch (A18 Pro, 2026)",
 
     "MacBook10,1": "MacBook 12-inch (Retina, 2017)",
     "MacBook9,1": "MacBook 12-inch (Retina, 2016, Early)",
