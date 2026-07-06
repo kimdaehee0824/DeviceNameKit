@@ -174,7 +174,7 @@ public enum DeviceNameFetcherError: Error {
 
 1. 이슈 또는 기능 요청은 `Issues` 탭에 남겨주세요.
 2. PR은 언제나 환영합니다. 검토 후 다음 버전에 반영하겠습니다.
-3. 기기 데이터를 수정할 때는 `DeviceName/` 폴더의 JSON을 수정한 뒤 `Scripts/sync-device-data.sh`를 실행하여 번들 리소스를 동기화해주세요. 두 위치가 일치하지 않으면 CI에서 실패합니다.
+3. 기기 데이터는 `DeviceName/` 폴더의 JSON 하나로 관리됩니다. 패키지가 이 폴더를 직접 번들하므로 별도의 동기화 작업은 필요 없습니다.
 
 > [!NOTE]
 > 이 저장소의 업데이트가 느리거나 JSON을 직접 관리하고 싶다면, 저장소를 fork하여 사용하세요. `Constant.swift`의 `modelNamePath`를 fork한 저장소 주소로 변경하면 됩니다.

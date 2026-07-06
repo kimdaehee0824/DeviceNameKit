@@ -174,7 +174,7 @@ public enum DeviceNameFetcherError: Error {
 
 1. イシューや機能リクエストは`Issues`タブにお寄せください。
 2. PRはいつでも歓迎します。レビューの上、次のバージョンに反映します。
-3. デバイスデータを変更する場合は、`DeviceName/`フォルダのJSONを編集した後、`Scripts/sync-device-data.sh`を実行して同梱リソースを同期してください。2つの場所が一致しないとCIが失敗します。
+3. デバイスデータは`DeviceName/`フォルダのJSONで一元管理されています。パッケージはこのフォルダを直接同梱するため、別途の同期作業は不要です。
 
 > [!NOTE]
 > このリポジトリの更新が遅い場合や、JSONを自分で管理したい場合は、リポジトリをforkしてご利用ください。`Constant.swift`の`modelNamePath`をforkしたリポジトリのURLに変更するだけです。

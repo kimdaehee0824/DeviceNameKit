@@ -177,7 +177,7 @@ Just bump the version — no code changes are required. Keep these behavior chan
 
 1. Please submit issues or feature requests under the `Issues` tab.
 2. Pull requests are always welcome. We will review them and include them in a future version.
-3. When updating device data, edit the JSON in the `DeviceName/` folder and run `Scripts/sync-device-data.sh` to sync the bundled resources. CI fails when the two locations differ.
+3. Device data is managed in a single place: the JSON files in the `DeviceName/` folder. The package bundles this folder directly, so no extra sync step is needed.
 
 > [!NOTE]
 > If updates to this repository are slow, or if you prefer to manage the JSON data yourself, fork this repository and point `modelNamePath` in `Constant.swift` to your fork.
