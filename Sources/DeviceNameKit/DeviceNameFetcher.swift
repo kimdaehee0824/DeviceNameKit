@@ -7,24 +7,33 @@ import Foundation
 import Combine
 import OSLog
 
-/// A class responsible for fetching and caching the device model name.
+/// Resolves and persists the device model name.
 ///
-/// `DeviceNameFetcher` retrieves the device model name and stores it in `UserDefaults`
-/// to optimize repeated queries. It supports multiple fetching methods:
-/// - **Async/Await**
-/// - **Completion Handler**
-/// - **Combine API** (`Future`)
+/// `DeviceNameFetcher` translates the device identifier (e.g., `"iPhone15,2"`)
+/// into its marketing name (e.g., `"iPhone 14 Pro"`) using a local-first pipeline:
 ///
-/// The cached data is automatically invalidated based on the `DeviceNameCachePolicy`.
-public final class DeviceNameFetcher {
-    private let fetcher: DeviceModelFetcher
+/// 1. A previously resolved name stored on the device.
+/// 2. The data set bundled with the SDK — no network required.
+/// 3. The remote data set on GitHub, consulted only when the device is newer
+///    than the bundled data, so brand-new devices are covered without an app update.
+///
+/// Only successful lookups are stored. Once a name has been resolved it is kept
+/// permanently under the default `.forever` policy and no further network
+/// request is ever made.
+///
+/// Supported access styles: **async/await**, **completion handler**, and **Combine**.
+public final class DeviceNameFetcher: Sendable {
+    private let provider: DeviceModelProvider
+    private let store: DeviceNameStore
+    private let resolver: DeviceNameResolver
     private let cachePolicy: DeviceNameCachePolicy
 
-    /// Initializes a new instance of `DeviceNameFetcher`.
+    /// Creates a fetcher for the current platform.
     ///
-    /// - Parameter cachePolicy: Defines the caching policy. The default is `.noCache`.
-    public init(cachePolicy: DeviceNameCachePolicy = .noCache) {
-        self.cachePolicy = cachePolicy
+    /// - Parameter cachePolicy: Controls how long a successfully resolved name
+    ///   is persisted. The default is `.forever`, which is recommended because
+    ///   a device's model name never changes.
+    public convenience init(cachePolicy: DeviceNameCachePolicy = .forever) {
         let provider: DeviceModelProvider
 
         #if os(iOS)
@@ -41,166 +50,114 @@ public final class DeviceNameFetcher {
         fatalError("Unsupported OS")
         #endif
 
-        self.fetcher = DeviceModelFetcher(provider: provider)
+        self.init(provider: provider, cachePolicy: cachePolicy, defaults: .standard)
     }
 
-    /// Preloads the device model name into the cache.
+    /// Internal initializer used for dependency injection in tests.
+    init(provider: DeviceModelProvider, cachePolicy: DeviceNameCachePolicy, defaults: UserDefaults) {
+        self.provider = provider
+        self.cachePolicy = cachePolicy
+        let store = DeviceNameStore(defaults: defaults)
+        self.store = store
+        self.resolver = DeviceNameResolver(provider: provider, store: store, cachePolicy: cachePolicy)
+    }
+
+    /// Warms up the resolution pipeline in the background.
     ///
-    /// This method fetches and stores the device model name if caching is enabled.
-    /// If an error occurs, it logs the failure but does not interrupt execution.
+    /// Calling this at app launch makes the name available by the time it is
+    /// first needed. Failures are logged and never interrupt execution.
     ///
     /// - Returns: The current `DeviceNameFetcher` instance for method chaining.
     @discardableResult
     public func preload() -> Self {
-        guard cachePolicy != .noCache else { return self }
-
-        if let cachedName = Self.getCachedDeviceName(), isValidCache() {
-            os_log("Using cached device model: %@", log: .default, type: .info, cachedName)
-            return self
-        }
-
-        Task.detached(priority: .background) { [weak self] in
-            guard let self = self else { return }
+        Task(priority: .utility) { [resolver] in
             do {
-                let name = try await self.getDeviceName()
-                Self.cacheDeviceName(name)
-                os_log("Device model cached: %@", log: .default, type: .info, name)
+                let name = try await resolver.resolve()
+                os_log("Device model resolved: %@", log: .default, type: .info, name)
             } catch {
-                os_log("DeviceNameFetcher Preload Error: %@", log: .default, type: .error, error.localizedDescription)
+                os_log("DeviceNameFetcher preload error: %@", log: .default, type: .error, error.localizedDescription)
             }
         }
-
         return self
     }
 
-    /// Retrieves the device model name asynchronously.
+    /// Resolves the device model name asynchronously.
     ///
-    /// - Returns: A `String` representing the device model name.
-    /// - Throws: A `DeviceNameFetcherError.fetchFailed` error if the fetch operation fails.
+    /// - Returns: The model name, or the raw identifier when the device is not
+    ///   part of any data set yet. In that case resolution is retried on later
+    ///   calls, and the identifier is never persisted as if it were a name.
+    /// - Throws: `DeviceNameFetcherError.fetchFailed` when the identifier is
+    ///   unknown locally and the remote request fails.
     public func getDeviceName() async throws -> String {
-        if let cachedName = Self.getCachedDeviceName(), isValidCache() { return cachedName }
-
-        var fetcher = self.fetcher
-        let deviceIdentifier = fetcher.getDeviceModelName()
-
-        do {
-            try await fetcher.loadDeviceModels()
-            let modelName = fetcher.getDeviceModelName()
-
-            if cachePolicy != .noCache {
-                Self.cacheDeviceName(modelName)
-            }
-            return modelName
-        } catch {
-            throw DeviceNameFetcherError.fetchFailed(deviceIdentifier: deviceIdentifier, underlyingError: error)
-        }
+        try await resolver.resolve()
     }
 
-    /// Retrieves the device model name asynchronously with internal error handling.
+    /// Resolves the device model name asynchronously without throwing.
     ///
-    /// If fetching fails, it returns the original device identifier instead of throwing an error.
-    /// The failure is logged for debugging purposes.
+    /// If resolution fails, the raw device identifier is returned instead and
+    /// the failure is logged for debugging purposes.
     ///
-    /// - Returns: A `String` representing the device model name, or the original device identifier in case of failure.
+    /// - Returns: The model name, or the raw device identifier in case of failure.
     public func getSafeDeviceName() async -> String {
-        if let cachedName = Self.getCachedDeviceName(), isValidCache() { return cachedName }
-
-        var fetcher = self.fetcher
-        let deviceIdentifier = fetcher.getDeviceModelName()
-
         do {
-            try await fetcher.loadDeviceModels()
-            let modelName = fetcher.getDeviceModelName()
-
-            if cachePolicy != .noCache { Self.cacheDeviceName(modelName) }
-            return modelName
+            return try await resolver.resolve()
         } catch {
-            os_log("Failed to fetch device model name: %@ (Identifier: %@)", log: .default, type: .error, error.localizedDescription, deviceIdentifier)
-            return deviceIdentifier
+            let identifier = provider.getDeviceIdentifier()
+            os_log("Failed to resolve device model name: %@ (identifier: %@)", log: .default, type: .error, error.localizedDescription, identifier)
+            return identifier
         }
     }
 
-    /// Retrieves the device model name using a completion handler.
+    /// Resolves the device model name using a completion handler.
     ///
-    /// - Parameter completion: A closure that returns the device model name or an error.
-    /// - Note: If an error occurs, `DeviceNameFetcherError.fetchFailed` is returned.
-    public func getDeviceName(completion: @escaping (Result<String, DeviceNameFetcherError>) -> Void) {
-        if let cachedName = Self.getCachedDeviceName(), isValidCache() {
-            completion(.success(cachedName))
-            return
-        }
-
-        let deviceIdentifier = fetcher.getDeviceModelName()
-
-        Task {
+    /// - Parameter completion: A closure that receives the model name or a
+    ///   `DeviceNameFetcherError`.
+    public func getDeviceName(completion: @escaping @Sendable (Result<String, DeviceNameFetcherError>) -> Void) {
+        Task { [resolver, provider] in
             do {
-                let name = try await getDeviceName()
-                completion(.success(name))
+                completion(.success(try await resolver.resolve()))
+            } catch let error as DeviceNameFetcherError {
+                completion(.failure(error))
             } catch {
-                completion(.failure(DeviceNameFetcherError.fetchFailed(deviceIdentifier: deviceIdentifier, underlyingError: error)))
+                completion(.failure(.fetchFailed(deviceIdentifier: provider.getDeviceIdentifier(), underlyingError: error)))
             }
         }
     }
 
-    /// Retrieves the device model name using Combine API.
+    /// Resolves the device model name using the Combine API.
     ///
-    /// - Returns: A `Future` publisher that emits the device model name or an error.
-    /// - Note: If an error occurs, `DeviceNameFetcherError.fetchFailed` is returned.
+    /// - Returns: A publisher that emits the model name or a `DeviceNameFetcherError`.
+    ///   The resolution starts when the publisher is subscribed to.
     public func getDeviceNamePublisher() -> AnyPublisher<String, DeviceNameFetcherError> {
-        if let cachedName = Self.getCachedDeviceName(), isValidCache() {
-            return Just(cachedName)
-                .setFailureType(to: DeviceNameFetcherError.self)
-                .eraseToAnyPublisher()
-        }
-
-        let deviceIdentifier = fetcher.getDeviceModelName()
-
-        return Future { promise in
-            Task {
-                do {
-                    let name = try await self.getDeviceName()
-                    promise(.success(name))
-                } catch {
-                    let customError = DeviceNameFetcherError.fetchFailed(deviceIdentifier: deviceIdentifier, underlyingError: error)
-                    promise(.failure(customError))
+        Deferred { [resolver, provider] in
+            Future { promise in
+                Task {
+                    do {
+                        promise(.success(try await resolver.resolve()))
+                    } catch let error as DeviceNameFetcherError {
+                        promise(.failure(error))
+                    } catch {
+                        promise(.failure(.fetchFailed(deviceIdentifier: provider.getDeviceIdentifier(), underlyingError: error)))
+                    }
                 }
             }
         }
         .eraseToAnyPublisher()
     }
 
-    /// Provides direct access to the cached device model name.
+    /// The device model name, if it can be determined without a network request.
+    ///
+    /// Returns the persisted resolved name when available, falling back to a
+    /// synchronous lookup in the bundled data set. Returns `nil` only for
+    /// devices unknown to the local data that have not been resolved remotely yet.
     public var deviceModel: String? {
-        return Self.getCachedDeviceName()
-    }
+        let identifier = provider.getDeviceIdentifier()
+        store.migrateIfNeeded(currentIdentifier: identifier)
 
-    // MARK: - Private Caching Logic
-
-    /// Retrieves the cached device model name from `UserDefaults`.
-    ///
-    /// - Returns: A cached device model name if available, otherwise `nil`.
-    private static func getCachedDeviceName() -> String? {
-        return UserDefaults.standard.string(forKey: Constant.userDefaultsDeviceNameKey)
-    }
-
-    /// Saves the device model name to `UserDefaults`.
-    ///
-    /// - Parameter name: The device model name to be cached.
-    private static func cacheDeviceName(_ name: String) {
-        UserDefaults.standard.setValue(name, forKey: Constant.userDefaultsDeviceNameKey)
-        UserDefaults.standard.setValue(Date().timeIntervalSince1970, forKey: Constant.userDefaultsLastFetchKey)
-    }
-
-    /// Validates if the cached data is still valid based on the caching policy.
-    ///
-    /// - Returns: `true` if the cache is still valid, otherwise `false`.
-    ///   If `.forever` is selected, this method always returns `true`.
-    private func isValidCache() -> Bool {
-        // If the policy is `.forever`, the cache never expires
-        if cachePolicy == .forever { return true }
-
-        let lastFetchTime = UserDefaults.standard.double(forKey: Constant.userDefaultsLastFetchKey)
-        let elapsedTime = Date().timeIntervalSince1970 - lastFetchTime
-        return cachePolicy.cacheDuration.map { elapsedTime < $0 } ?? false
+        if let stored = store.resolvedName(for: identifier, policy: cachePolicy) {
+            return stored
+        }
+        guard let bundled = try? provider.loadBundledModels() else { return nil }
+        return bundled[identifier]
     }
 }
