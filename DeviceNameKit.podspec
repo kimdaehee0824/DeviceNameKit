@@ -11,6 +11,7 @@ Pod::Spec.new do |spec|
   spec.swift_version = "5.9"
   spec.platforms = {
     :ios => "13.0",
+    :osx => "11.0",
     :watchos => "6.0",
     :tvos => "13.0",
     :visionos => "1.0"
