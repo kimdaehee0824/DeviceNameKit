@@ -32,10 +32,14 @@ final class StubDeviceModelProvider: DeviceModelProvider, @unchecked Sendable {
 
     func loadBundledModels() throws -> [String: String] { bundledModels }
 
-    func fetchDeviceModels() async throws -> [String: String] {
+    private func incrementFetchCount() {
         lock.lock()
         _remoteFetchCount += 1
         lock.unlock()
+    }
+
+    func fetchDeviceModels() async throws -> [String: String] {
+        incrementFetchCount()
         if remoteDelay > 0 {
             try await Task.sleep(nanoseconds: UInt64(remoteDelay * 1_000_000_000))
         }
