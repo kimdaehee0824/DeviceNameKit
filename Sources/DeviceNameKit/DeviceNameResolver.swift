@@ -14,19 +14,20 @@ import Foundation
 ///    to the bundled data (i.e., devices newer than the installed SDK).
 ///
 /// Only successful lookups are persisted. When every source misses, the raw
-/// identifier is returned and resolution is retried later, throttled by
-/// `Constant.remoteMissRetryInterval`.
+/// identifier is returned and resolution is retried after
+/// `Constant.remoteMissRetryInterval`, including within the same process.
 actor DeviceNameResolver {
     private let provider: DeviceModelProvider
     private let store: DeviceNameStore
     private let cachePolicy: DeviceNameCachePolicy
 
     /// The name resolved during this process's lifetime.
+    /// Never set under `.noCache`, which re-resolves on every call.
     private var memoizedName: String?
 
-    /// Set when the remote data was fetched successfully but did not contain
-    /// the identifier; suppresses further remote calls within this session.
-    private var remoteMissedThisSession = false
+    /// The bundled data set, decoded once per resolver lifetime.
+    /// The app bundle cannot change while the process is running.
+    private var cachedBundledModels: [String: String]?
 
     private var inFlight: Task<String, Error>?
 
@@ -54,19 +55,18 @@ actor DeviceNameResolver {
 
     private func performResolution() async throws -> String {
         let identifier = provider.getDeviceIdentifier()
-        store.migrateIfNeeded(currentIdentifier: identifier)
 
         if let stored = store.resolvedName(for: identifier, policy: cachePolicy) {
             memoizedName = stored
             return stored
         }
 
-        if let bundled = try? provider.loadBundledModels(), let name = bundled[identifier] {
+        if let name = bundledModels()[identifier] {
             persist(name: name, identifier: identifier)
             return name
         }
 
-        guard remoteMissedThisSession == false, store.canRetryRemote() else {
+        guard store.canRetryRemote() else {
             return identifier
         }
 
@@ -76,7 +76,6 @@ actor DeviceNameResolver {
                 persist(name: name, identifier: identifier)
                 return name
             }
-            remoteMissedThisSession = true
             store.markRemoteMiss()
             return identifier
         } catch {
@@ -84,10 +83,16 @@ actor DeviceNameResolver {
         }
     }
 
+    private func bundledModels() -> [String: String] {
+        if let cachedBundledModels { return cachedBundledModels }
+        let models = (try? provider.loadBundledModels()) ?? [:]
+        cachedBundledModels = models
+        return models
+    }
+
     private func persist(name: String, identifier: String) {
+        guard cachePolicy != .noCache else { return }
         memoizedName = name
-        if cachePolicy != .noCache {
-            store.save(name: name, identifier: identifier)
-        }
+        store.save(name: name, identifier: identifier)
     }
 }
