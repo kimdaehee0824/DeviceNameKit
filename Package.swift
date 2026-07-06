@@ -17,11 +17,29 @@ let package = Package(
             targets: ["DeviceNameKit"]),
     ],
     targets: [
+        // The target is rooted at the repository so it can bundle the canonical
+        // `DeviceName/` folder directly — the same folder served raw to 1.x
+        // clients — without keeping a duplicated copy inside `Sources/`.
         .target(
-            name: "DeviceNameKit"),
+            name: "DeviceNameKit",
+            path: ".",
+            exclude: [
+                "Sources/DeviceNameKitTests",
+                "Asset",
+                "DeviceNameKit.podspec",
+                "LICENSE",
+                "README.md",
+                "README_ko.md",
+                "README_jp.md"
+            ],
+            sources: ["Sources/DeviceNameKit"],
+            resources: [
+                .copy("DeviceName")
+            ]),
         .testTarget(
             name: "DeviceNameKitTests",
-            dependencies: ["DeviceNameKit"]
+            dependencies: ["DeviceNameKit"],
+            path: "Sources/DeviceNameKitTests"
         ),
     ]
 )

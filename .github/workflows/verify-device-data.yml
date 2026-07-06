@@ -1,0 +1,38 @@
+name: Verify device data
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate-json:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 1.x clients decode these files as a flat [String: String] map straight
+      # from raw.githubusercontent.com, so the schema must stay frozen.
+      - name: Validate JSON files (flat string-to-string schema)
+        run: |
+          python3 - <<'EOF'
+          import glob, json, sys
+          failed = False
+          for path in sorted(glob.glob("DeviceName/*.json")):
+              with open(path) as fh:
+                  data = json.load(fh)
+              if not isinstance(data, dict) or not all(
+                  isinstance(k, str) and isinstance(v, str) for k, v in data.items()
+              ):
+                  print(f"Schema violation (must be a flat string-to-string map): {path}")
+                  failed = True
+          sys.exit(1 if failed else 0)
+          EOF
+
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run tests (also verifies resource bundling)
+        run: swift test

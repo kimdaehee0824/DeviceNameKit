@@ -5,41 +5,45 @@
 
 import Foundation
 
-/// A policy that determines how long the fetched device name should be cached.
+/// A policy that determines how long a successfully resolved device name is persisted.
 ///
-/// `DeviceNameCachePolicy` specifies the duration for which the fetched device model name is stored.
-/// When the cache expires, the data will be re-fetched from the provider.
-public enum DeviceNameCachePolicy: Equatable {
+/// Only successful lookups are ever stored — an identifier that could not be
+/// resolved is never written, regardless of the policy. Because a device's
+/// model name never changes, `.forever` (the default) is recommended.
+public enum DeviceNameCachePolicy: Equatable, Sendable {
 
-    /// No caching. The device model name is always fetched anew.
+    /// Never persists the resolved name. The name is re-resolved on every use,
+    /// starting from the bundled data set.
     case noCache
 
-    /// Cache the device model name for **1 day (24 hours)**.
+    /// Persists the resolved name for **1 day (24 hours)**.
     case oneDay
 
-    /// Cache the device model name for **3 days (72 hours)**.
+    /// Persists the resolved name for **3 days (72 hours)**.
     case threeDays
 
-    /// Cache the device model name for **7 days (1 week)**.
+    /// Persists the resolved name for **7 days (1 week)**.
     case sevenDays
 
-    /// Cache the device model name for **1 month (30 days)**.
+    /// Persists the resolved name for **1 month (30 days)**.
     case oneMonth
 
-    /// Cache the device model name **forever** (permanently stored until manually removed).
+    /// Persists the resolved name **forever** (recommended).
     ///
-    /// This option ensures that once fetched, the device model name is never re-fetched.
+    /// Once a name has been resolved, it is never re-fetched.
     case forever
 
-    /// A custom caching policy with a user-defined duration.
+    /// A custom persistence policy with a user-defined duration.
     ///
-    /// - Parameter duration: The caching duration in seconds.
+    /// - Parameter duration: The persistence duration in seconds.
     case custom(TimeInterval)
 
-    /// Returns the cache duration based on the selected policy.
+    /// Returns the persistence duration based on the selected policy.
     ///
-    /// - Returns: The cache duration in seconds. Returns `nil` for `.noCache`, meaning no caching is applied.
-    ///   If `.forever` is selected, this returns `Double.greatestFiniteMagnitude` to represent an effectively infinite duration.
+    /// - Returns: The duration in seconds. Returns `nil` for `.noCache`,
+    ///   meaning no persistence is applied. If `.forever` is selected, this
+    ///   returns `Double.greatestFiniteMagnitude` to represent an effectively
+    ///   infinite duration.
     public var cacheDuration: TimeInterval? {
         switch self {
         case .noCache:

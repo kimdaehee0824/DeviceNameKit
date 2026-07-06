@@ -2,21 +2,32 @@
 
 > You can view the document in different languages: [English](README.md), [한국어](README_ko.md), [日本語](README_jp.md)
 
-**DeviceNameKit** is a powerful SDK that converts Apple device **identifiers (Device Identifier) into commercial model names (Device Model Name)**. It supports all Apple platforms, including iPhone, iPad, Mac, Apple TV, Vision Pro, and Apple Watch, and automatically maps the latest device information to provide intuitive model names.
+**DeviceNameKit** is an SDK that converts Apple **device identifiers into commercial model names**. It supports every Apple platform: iPhone, iPad, Mac, Apple Watch, Apple TV, and Vision Pro.
 
-This library converts Apple's internal device identifiers (e.g., `iPhone15,2`) into user-friendly product names (e.g., `iPhone 14 Pro`). Additionally, it includes a **UserDefaults-based caching feature** to minimize unnecessary network requests and optimize performance.
+The library translates Apple's internal device identifiers (e.g., `iPhone15,2`) into user-friendly product names (e.g., `iPhone 14 Pro`). The mapping data ships inside the SDK, so **most devices are resolved instantly without any network request**. Only devices newer than the bundled data are looked up remotely, which means **brand-new devices are covered without an app update**.
 
-**DeviceNameKit** offers multiple data retrieval methods, allowing developers to choose the most suitable approach for their needs.
+- **Local-first resolution:** Works offline thanks to the bundled data set
+- **Automatic coverage of new devices:** Only identifiers missing from the bundled data are looked up remotely — no app update required
+- **Resolve once, keep forever:** Only successful lookups are persisted; after that, no network request is ever made
+- **async/await support:** Clean, intuitive asynchronous handling with Swift Concurrency
+- **Completion handler support:** The traditional callback pattern works as well
+- **Combine API support:** A reactive flow that starts on subscription
+- **Safe lookup:** `getSafeDeviceName()` returns the raw device identifier on failure, so your app keeps working
 
-- **Supports async/await:** Leverages Swift Concurrency for clean and intuitive asynchronous handling
-- **Supports Completion Handler:** Enables flexible data retrieval using the traditional callback pattern
-- **Supports Combine API:** Implements a reactive data flow using `Future`
-- **Caching feature:** Stores device model data to prevent repeated API calls and improve performance
-- **Reliable data retrieval:** The `getSafeDeviceName()` method ensures the app continues to function correctly even if a network error occurs by returning the original device identifier
-
-This SDK is useful in various scenarios where the app needs to correctly recognize the device model name, such as **applying device-specific settings, log analysis, A/B testing, and customer support emails.**
+The SDK is useful wherever the exact device model name matters: **device-specific settings, log analysis, A/B testing, and customer support.**
 
 To check out the demo app, click [here](https://github.com/kimdaehee0824/DeviceNameKit_Demo).
+
+## What's New in 2.0
+
+v2.0.0 rebuilds the lookup flow around a local-first pipeline. **The public API is unchanged, so you can update without touching your code.**
+
+- The device data set is bundled with the SDK, so it works offline and in restricted network environments.
+- The remote data set is consulted only for devices newer than the bundled data.
+- Only successfully resolved names are persisted. An identifier without a mapping yet is never stored, and resolution retries automatically once the data is updated.
+- Caches written by 1.x are migrated only after being verified against the bundled data; unverifiable entries (raw identifiers stored during a data gap, or values restored from another device's backup) are discarded and re-resolved.
+- The default cache policy changed from `.noCache` to `.forever` — a device's model name never changes, so permanent storage is the right default.
+- On the simulator, the simulated device's model name is returned instead of the host architecture (`arm64`).
 
 ## Supported Platforms
 
@@ -37,7 +48,7 @@ To check out the demo app, click [here](https://github.com/kimdaehee0824/DeviceN
    ```
    https://github.com/kimdaehee0824/DeviceNameKit.git
    ```
-3. After adding the dependency, you can use DeviceNameKit by importing it:
+3. Choose version `2.0.0` or later, then use the package with:
    ```swift
    import DeviceNameKit
    ```
@@ -46,21 +57,21 @@ To check out the demo app, click [here](https://github.com/kimdaehee0824/DeviceN
 
 ### 1. Basic Device Model Name Conversion (`async/await`)
 ```swift
-let fetcher = DeviceNameFetcher(cachePolicy: .oneDay)
+let fetcher = DeviceNameFetcher() // default policy: .forever
 
 Task {
     do {
         let modelName = try await fetcher.getDeviceName()
-        print("Device Model Name: \(modelName)") // e.g., iPhone 15 Pro
+        print("Device Model Name: \(modelName)") // e.g., iPhone 14 Pro
     } catch {
         print("Error: \(error.localizedDescription)")
     }
 }
 ```
 
-### 2. Using Completion Handler
+### 2. Using a Completion Handler
 ```swift
-let fetcher = DeviceNameFetcher(cachePolicy: .oneDay)
+let fetcher = DeviceNameFetcher()
 
 fetcher.getDeviceName { result in
     switch result {
@@ -72,11 +83,11 @@ fetcher.getDeviceName { result in
 }
 ```
 
-### 3. Using Combine API
+### 3. Using the Combine API
 ```swift
 import Combine
 
-let fetcher = DeviceNameFetcher(cachePolicy: .oneDay)
+let fetcher = DeviceNameFetcher()
 
 let cancellable = fetcher.getDeviceNamePublisher()
     .sink(receiveCompletion: { completion in
@@ -88,53 +99,53 @@ let cancellable = fetcher.getDeviceNamePublisher()
     })
 ```
 
-### 4. Function That Does Not Emit Errors (`getSafeDeviceName`)
-Using `getSafeDeviceName()`, the original device identifier is returned if an error occurs, making error handling unnecessary.
+### 4. A Function That Never Throws (`getSafeDeviceName`)
+`getSafeDeviceName()` returns the raw device identifier when resolution fails, so it is a good fit when you do not need explicit error handling.
 
 ```swift
-let fetcher = DeviceNameFetcher(cachePolicy: .oneDay)
+let fetcher = DeviceNameFetcher()
 
 Task {
     let modelName = await fetcher.getSafeDeviceName()
     print("Device Model Name: \(modelName)")
 }
 ```
-This method internally logs failures using `os.log` while returning the original device identifier.
+On failure this method returns the original device identifier and logs the error via `os.log`.
 
 ### 5. Preloading with `preload()`
-Calling `preload()` allows the device model name to be retrieved and cached in advance by communicating with the server.
+Calling `preload()` resolves the model name in the background. Call it at app launch and the value is ready by the time you need it.
 
 ```swift
-let fetcher = DeviceNameFetcher(cachePolicy: .threeDays)
-fetcher.preload() // Optimize performance by preloading at app launch
+let fetcher = DeviceNameFetcher()
+fetcher.preload() // resolve ahead of time at app launch
 ```
 
-### 6. Accessing via `deviceModel` Property
-After calling `preload()`, the model name can be accessed directly as a `String` after a certain time. If the server communication is incomplete or has failed, it returns `nil`.
+### 6. Synchronous Access via the `deviceModel` Property
+Returns the model name from the persisted value or the bundled data set, without any network request. It returns `nil` only for a device missing from the bundled data that has not been resolved remotely yet.
 
 ```swift
 print("Current Device Model Name: \(fetcher.deviceModel ?? "Unknown")")
 ```
 
-## Caching Policy
+## Cache Policy
+
+The cache policy controls **how long a successfully resolved name is persisted on the device**. An identifier that could not be resolved is never stored, regardless of the policy.
+
 | Policy | Description |
 |---|---|
-| `.noCache` | Always fetches the latest data |
-| `.oneDay` | Caches data for 1 day |
-| `.threeDays` | Caches data for 3 days |
-| `.sevenDays` | Caches data for 7 days |
-| `.oneMonth` | Caches data for 1 month |
-| `.custom(TimeInterval)` | Custom caching duration |
-| `.forever` | Caches data permanently |
+| `.forever` (default) | Keeps a resolved name permanently — recommended |
+| `.oneDay` | Persists for 1 day |
+| `.threeDays` | Persists for 3 days |
+| `.sevenDays` | Persists for 7 days |
+| `.oneMonth` | Persists for 1 month |
+| `.custom(TimeInterval)` | Custom duration |
+| `.noCache` | Never persists; re-resolves every time (the bundled data is still used first) |
 
-### Applying Caching
+A device's model name never changes, so we recommend keeping the default `.forever`.
+
 ```swift
-let fetcher = DeviceNameFetcher(cachePolicy: .threeDays)
+let fetcher = DeviceNameFetcher(cachePolicy: .forever)
 ```
-With this configuration, the same device returns cached model names for 3 days, after which the data is refreshed.
-Since device model names rarely change, permanent caching is recommended.
-
-If caching is not set, the latest data is always fetched.
 
 ## Error Handling
 The `DeviceNameFetcherError` enum provides error details.
@@ -144,21 +155,34 @@ public enum DeviceNameFetcherError: Error {
     case fetchFailed(deviceIdentifier: String, underlyingError: Error)
 }
 ```
-When an error occurs, `deviceIdentifier` (e.g., "iPhone17,4") and the `underlyingError` can be inspected.
+When an error occurs, you can inspect the `deviceIdentifier` (e.g., `"iPhone15,2"`) and the `underlyingError`. This error is thrown only when a device unknown to the local data fails to be resolved remotely.
 
 ## How It Works
-1. **Retrieve Device Identifier:** The current device's identifier is obtained using `uname()` or `sysctlbyname("hw.model")`.
-2. **Map to Device Model Name:** The JSON data stored in this GitHub repository is referenced to obtain the latest device model name. The JSON files are located in the `DeviceName` folder, categorized by OS.
+1. **Read the device identifier:** The identifier is obtained via `uname()` or `sysctlbyname("hw.model")`.
+2. **Check the persisted value:** If a previously resolved name is stored on the device, it is returned immediately.
+3. **Look up the bundled data:** The identifier is searched in the JSON data shipped with the SDK. Most devices are resolved here with zero network traffic.
+4. **Look up the remote data:** Only for devices missing from the bundled data, the latest JSON in this repository's `DeviceName` folder is fetched. If the identifier is not there yet either, the raw identifier is returned and resolution retries after a cool-down (1 hour).
+
+Because only successful lookups are stored, a temporary gap in the data set can never poison the persisted value.
+
+## Upgrading from 1.x
+
+Just bump the version — no code changes are required. Keep these behavior changes in mind:
+
+- The default cache policy is now `.forever`. To keep the old default, pass `DeviceNameFetcher(cachePolicy: .noCache)` explicitly.
+- Caches written by 1.x are migrated on first run only when they match the bundled data. Entries that stored the raw identifier, or values restored from another device's backup, are discarded and re-resolved correctly.
+- The completion handler closure is now `@Sendable`. Most code is unaffected, but closures capturing non-Sendable state may need changes under Swift 6 strict concurrency.
+- The `DeviceName/` folder and its JSON schema remain unchanged in this repository, so 1.x clients keep working.
 
 ## Contribution
 
 1. Please submit issues or feature requests under the `Issues` tab.
-2. Pull requests are always welcome. If you work on changes or new features, we will review them and add them to future versions.
+2. Pull requests are always welcome. We will review them and include them in a future version.
+3. Device data is managed in a single place: the JSON files in the `DeviceName/` folder. The package bundles this folder directly, so no extra sync step is needed.
 
 > [!NOTE]
-> If updates to this repository are slow, or if you prefer to manage the JSON data yourself, fork this repository and update it directly.
+> If updates to this repository are slow, or if you prefer to manage the JSON data yourself, fork this repository and point `modelNamePath` in `Constant.swift` to your fork.
 
 ## License
 
 This project is distributed under the MIT License. For details, refer to the [`LICENSE`](LICENSE) file.
-
