@@ -54,11 +54,19 @@ public final class DeviceNameFetcher: Sendable {
     }
 
     /// Internal initializer used for dependency injection in tests.
+    ///
+    /// The 1.x cache migration runs exactly once here, before any resolution,
+    /// so no other code path ever writes legacy state concurrently.
     init(provider: DeviceModelProvider, cachePolicy: DeviceNameCachePolicy, defaults: UserDefaults) {
         self.provider = provider
         self.cachePolicy = cachePolicy
         let store = DeviceNameStore(defaults: defaults)
         self.store = store
+
+        let identifier = provider.getDeviceIdentifier()
+        let bundledName = (try? provider.loadBundledModels())?[identifier]
+        store.migrateIfNeeded(currentIdentifier: identifier, verifiedName: bundledName)
+
         self.resolver = DeviceNameResolver(provider: provider, store: store, cachePolicy: cachePolicy)
     }
 
@@ -102,7 +110,13 @@ public final class DeviceNameFetcher: Sendable {
         do {
             return try await resolver.resolve()
         } catch {
-            let identifier = provider.getDeviceIdentifier()
+            let identifier: String
+            if let fetchError = error as? DeviceNameFetcherError,
+               case .fetchFailed(let deviceIdentifier, _) = fetchError {
+                identifier = deviceIdentifier
+            } else {
+                identifier = provider.getDeviceIdentifier()
+            }
             os_log("Failed to resolve device model name: %@ (identifier: %@)", log: .default, type: .error, error.localizedDescription, identifier)
             return identifier
         }
@@ -152,7 +166,6 @@ public final class DeviceNameFetcher: Sendable {
     /// devices unknown to the local data that have not been resolved remotely yet.
     public var deviceModel: String? {
         let identifier = provider.getDeviceIdentifier()
-        store.migrateIfNeeded(currentIdentifier: identifier)
 
         if let stored = store.resolvedName(for: identifier, policy: cachePolicy) {
             return stored
