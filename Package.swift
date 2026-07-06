@@ -18,7 +18,10 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "DeviceNameKit"),
+            name: "DeviceNameKit",
+            resources: [
+                .copy("Resources/DeviceName")
+            ]),
         .testTarget(
             name: "DeviceNameKitTests",
             dependencies: ["DeviceNameKit"]
