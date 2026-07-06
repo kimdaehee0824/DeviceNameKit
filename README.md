@@ -25,7 +25,7 @@ v2.0.0 rebuilds the lookup flow around a local-first pipeline. **The public API 
 - The device data set is bundled with the SDK, so it works offline and in restricted network environments.
 - The remote data set is consulted only for devices newer than the bundled data.
 - Only successfully resolved names are persisted. An identifier without a mapping yet is never stored, and resolution retries automatically once the data is updated.
-- Caches written by 1.x are migrated automatically; corrupted entries that stored the raw identifier are discarded and re-resolved.
+- Caches written by 1.x are migrated only after being verified against the bundled data; unverifiable entries (raw identifiers stored during a data gap, or values restored from another device's backup) are discarded and re-resolved.
 - The default cache policy changed from `.noCache` to `.forever` — a device's model name never changes, so permanent storage is the right default.
 - On the simulator, the simulated device's model name is returned instead of the host architecture (`arm64`).
 
@@ -170,7 +170,8 @@ Because only successful lookups are stored, a temporary gap in the data set can 
 Just bump the version — no code changes are required. Keep these behavior changes in mind:
 
 - The default cache policy is now `.forever`. To keep the old default, pass `DeviceNameFetcher(cachePolicy: .noCache)` explicitly.
-- Caches written by 1.x are migrated automatically on first run. Entries that stored the raw identifier during a data gap are discarded and re-resolved correctly.
+- Caches written by 1.x are migrated on first run only when they match the bundled data. Entries that stored the raw identifier, or values restored from another device's backup, are discarded and re-resolved correctly.
+- The completion handler closure is now `@Sendable`. Most code is unaffected, but closures capturing non-Sendable state may need changes under Swift 6 strict concurrency.
 - The `DeviceName/` folder and its JSON schema remain unchanged in this repository, so 1.x clients keep working.
 
 ## Contribution
