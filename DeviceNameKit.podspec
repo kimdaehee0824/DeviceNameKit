@@ -17,7 +17,7 @@ Pod::Spec.new do |spec|
   }
 
   spec.source_files = "Sources/DeviceNameKit/**/*.{swift}"
-  spec.resource_bundles = { "DeviceNameKit" => ["Sources/DeviceNameKit/Resources/DeviceName"] }
+  spec.resource_bundles = { "DeviceNameKit" => ["DeviceName"] }
 
   spec.frameworks = "Foundation"
   spec.requires_arc = true
