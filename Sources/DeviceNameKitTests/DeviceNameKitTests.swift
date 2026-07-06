@@ -4,6 +4,10 @@ import Combine
 @testable import DeviceNameKit
 
 /// A `DeviceModelProvider` stub with controllable data sources.
+///
+/// Only `remoteFetchCount` is lock-protected. The other properties are plain
+/// `var`s and must be mutated between awaited calls, never while a resolve is
+/// in flight.
 final class StubDeviceModelProvider: DeviceModelProvider, @unchecked Sendable {
     let jsonURL = URL(string: "https://example.com/stub.json")!
     let bundledFileName = "Stub"
@@ -112,6 +116,43 @@ func unknownIdentifierIsNeverPersisted() async throws {
 }
 
 @Test
+func remoteMissRetriesWithinSameSessionAfterThrottleWindow() async throws {
+    let provider = StubDeviceModelProvider(identifier: "iPhone99,1",
+                                           remoteModels: .success([:]))
+    let defaults = makeDefaults()
+    let fetcher = DeviceNameFetcher(provider: provider, cachePolicy: .forever, defaults: defaults)
+
+    let firstName = try await fetcher.getDeviceName()
+    #expect(firstName == "iPhone99,1")
+    #expect(provider.remoteFetchCount == 1)
+
+    // The cool-down elapses and the repository gains the mapping — the SAME
+    // long-lived instance must retry without requiring an app relaunch.
+    defaults.set(Date().timeIntervalSince1970 - Constant.remoteMissRetryInterval - 1,
+                 forKey: Constant.lastRemoteMissKey)
+    provider.remoteModels = .success(["iPhone99,1": "iPhone Future"])
+
+    let secondName = try await fetcher.getDeviceName()
+    #expect(secondName == "iPhone Future")
+    #expect(provider.remoteFetchCount == 2)
+}
+
+@Test
+func futureMissTimestampDoesNotBlockRetry() async throws {
+    let provider = StubDeviceModelProvider(identifier: "iPhone99,1",
+                                           remoteModels: .success(["iPhone99,1": "iPhone Future"]))
+    let defaults = makeDefaults()
+    // A miss recorded while the clock was set forward must not wedge retries
+    // after the clock is corrected.
+    defaults.set(Date().timeIntervalSince1970 + 100_000, forKey: Constant.lastRemoteMissKey)
+
+    let fetcher = DeviceNameFetcher(provider: provider, cachePolicy: .forever, defaults: defaults)
+    let name = try await fetcher.getDeviceName()
+    #expect(name == "iPhone Future")
+    #expect(provider.remoteFetchCount == 1)
+}
+
+@Test
 func remoteMissRetriesAfterThrottleWindow() async throws {
     let provider = StubDeviceModelProvider(identifier: "iPhone99,1",
                                            remoteModels: .success([:]))
@@ -153,6 +194,17 @@ func safeVariantReturnsIdentifierOnFailure() async {
     #expect(name == "iPhone99,1")
 }
 
+@Test
+func bundledHitSucceedsWhileOffline() async throws {
+    let provider = StubDeviceModelProvider(identifier: "iPhone15,2",
+                                           bundledModels: ["iPhone15,2": "iPhone 14 Pro"],
+                                           remoteModels: .failure(StubError()))
+    let fetcher = DeviceNameFetcher(provider: provider, cachePolicy: .forever, defaults: makeDefaults())
+
+    #expect(try await fetcher.getDeviceName() == "iPhone 14 Pro")
+    #expect(provider.remoteFetchCount == 0)
+}
+
 // MARK: - Cache policies
 
 @Test
@@ -165,6 +217,34 @@ func noCachePolicyDoesNotPersist() async throws {
     let name = try await fetcher.getDeviceName()
     #expect(name == "iPhone 14 Pro")
     #expect(defaults.string(forKey: Constant.resolvedNameKey) == nil)
+}
+
+@Test
+func noCachePolicyReResolvesOnEveryCall() async throws {
+    // An identifier only the remote data knows makes re-resolution observable:
+    // without memoization every call must reach the network again.
+    let provider = StubDeviceModelProvider(identifier: "iPhone99,1",
+                                           remoteModels: .success(["iPhone99,1": "iPhone Future"]))
+    let fetcher = DeviceNameFetcher(provider: provider, cachePolicy: .noCache, defaults: makeDefaults())
+
+    #expect(try await fetcher.getDeviceName() == "iPhone Future")
+    #expect(try await fetcher.getDeviceName() == "iPhone Future")
+    #expect(provider.remoteFetchCount == 2)
+}
+
+@Test
+func expiredTTLReResolvesFromBundle() async throws {
+    let defaults = makeDefaults()
+    defaults.set(Constant.schemaVersion, forKey: Constant.schemaVersionKey)
+    defaults.set("Old Name", forKey: Constant.resolvedNameKey)
+    defaults.set("iPhone15,2", forKey: Constant.resolvedIdentifierKey)
+    defaults.set(Date().timeIntervalSince1970 - 60 * 60 * 48, forKey: Constant.resolvedAtKey)
+
+    let provider = StubDeviceModelProvider(identifier: "iPhone15,2",
+                                           bundledModels: ["iPhone15,2": "iPhone 14 Pro"])
+    let fetcher = DeviceNameFetcher(provider: provider, cachePolicy: .oneDay, defaults: defaults)
+
+    #expect(try await fetcher.getDeviceName() == "iPhone 14 Pro")
 }
 
 // MARK: - 1.x migration
@@ -186,18 +266,59 @@ func poisonedLegacyCacheIsDiscarded() async throws {
 }
 
 @Test
-func validLegacyCacheIsMigrated() async throws {
+func verifiedLegacyCacheIsMigratedWithOriginalTimestamp() async throws {
     let defaults = makeDefaults()
+    let legacyFetchTime: TimeInterval = 1_700_000_000
     defaults.set("iPhone 14 Pro", forKey: Constant.legacyDeviceNameKey)
-    defaults.set(Date().timeIntervalSince1970, forKey: Constant.legacyLastFetchKey)
+    defaults.set(legacyFetchTime, forKey: Constant.legacyLastFetchKey)
 
-    // No bundled or remote data — the migrated value must be used as-is.
-    let provider = StubDeviceModelProvider(identifier: "iPhone15,2")
+    // The legacy value matches the bundled name, so it is carried over —
+    // even while the network is unreachable.
+    let provider = StubDeviceModelProvider(identifier: "iPhone15,2",
+                                           bundledModels: ["iPhone15,2": "iPhone 14 Pro"],
+                                           remoteModels: .failure(StubError()))
     let fetcher = DeviceNameFetcher(provider: provider, cachePolicy: .forever, defaults: defaults)
 
     let name = try await fetcher.getDeviceName()
     #expect(name == "iPhone 14 Pro")
     #expect(provider.remoteFetchCount == 0)
+    #expect(defaults.double(forKey: Constant.resolvedAtKey) == legacyFetchTime)
+    #expect(defaults.string(forKey: Constant.legacyDeviceNameKey) == nil)
+}
+
+@Test
+func legacyCacheFromAnotherDeviceIsDiscarded() async throws {
+    let defaults = makeDefaults()
+    // The standard upgrade path: an old phone's backup was restored onto a
+    // new phone, so the 1.x cache holds the OLD device's name.
+    defaults.set("iPhone 14 Pro", forKey: Constant.legacyDeviceNameKey)
+    defaults.set(Date().timeIntervalSince1970, forKey: Constant.legacyLastFetchKey)
+
+    let provider = StubDeviceModelProvider(identifier: "iPhone17,1",
+                                           bundledModels: ["iPhone17,1": "iPhone 16 Pro"])
+    let fetcher = DeviceNameFetcher(provider: provider, cachePolicy: .forever, defaults: defaults)
+
+    let name = try await fetcher.getDeviceName()
+    #expect(name == "iPhone 16 Pro")
+    #expect(defaults.string(forKey: Constant.resolvedNameKey) == "iPhone 16 Pro")
+}
+
+@Test
+func unverifiableLegacyCacheIsDiscardedAndReResolved() async throws {
+    let defaults = makeDefaults()
+    // The identifier is unknown to the bundled data, so the legacy value
+    // cannot be verified — it may belong to another device. Discard it and
+    // resolve remotely from scratch.
+    defaults.set("iPhone 14 Pro", forKey: Constant.legacyDeviceNameKey)
+    defaults.set(Date().timeIntervalSince1970, forKey: Constant.legacyLastFetchKey)
+
+    let provider = StubDeviceModelProvider(identifier: "iPhone99,1",
+                                           remoteModels: .success(["iPhone99,1": "iPhone Future"]))
+    let fetcher = DeviceNameFetcher(provider: provider, cachePolicy: .forever, defaults: defaults)
+
+    let name = try await fetcher.getDeviceName()
+    #expect(name == "iPhone Future")
+    #expect(provider.remoteFetchCount == 1)
 }
 
 @Test
@@ -257,6 +378,45 @@ func completionHandlerDeliversResolvedName() async {
         fetcher.getDeviceName { continuation.resume(returning: $0) }
     }
     #expect((try? result.get()) == "iPhone 14 Pro")
+}
+
+@Test
+func completionHandlerDeliversFailure() async {
+    let provider = StubDeviceModelProvider(identifier: "iPhone99,1",
+                                           remoteModels: .failure(StubError()))
+    let fetcher = DeviceNameFetcher(provider: provider, cachePolicy: .forever, defaults: makeDefaults())
+
+    let result = await withCheckedContinuation { continuation in
+        fetcher.getDeviceName { continuation.resume(returning: $0) }
+    }
+    guard case .failure(.fetchFailed(let identifier, _)) = result else {
+        Issue.record("Expected fetchFailed, got \(result)")
+        return
+    }
+    #expect(identifier == "iPhone99,1")
+}
+
+@Test
+func publisherDeliversFailure() async {
+    let provider = StubDeviceModelProvider(identifier: "iPhone99,1",
+                                           remoteModels: .failure(StubError()))
+    let fetcher = DeviceNameFetcher(provider: provider, cachePolicy: .forever, defaults: makeDefaults())
+
+    let error: DeviceNameFetcherError? = await withCheckedContinuation { continuation in
+        var cancellable: AnyCancellable?
+        cancellable = fetcher.getDeviceNamePublisher()
+            .sink(receiveCompletion: { completion in
+                if case .failure(let error) = completion { continuation.resume(returning: error) }
+                withExtendedLifetime(cancellable) { cancellable = nil }
+            }, receiveValue: { _ in
+                continuation.resume(returning: nil)
+            })
+    }
+    guard case .fetchFailed(let identifier, _)? = error else {
+        Issue.record("Expected fetchFailed, got \(String(describing: error))")
+        return
+    }
+    #expect(identifier == "iPhone99,1")
 }
 
 @Test
